@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="960" height="360" rx="16" fill="#FFFFFF" stroke="#E5E5E5"/>
+  <text x="480" y="44" text-anchor="middle" font-size="24" font-weight="700" fill="#111">Install in Claude Code (about 1 minute)</text>
+
+  <!-- Step 1 -->
+  <g transform="translate(30,70)">
+    <rect width="280" height="260" rx="14" fill="#FAFAFA" stroke="#DDD"/>
+    <circle cx="36" cy="36" r="20" fill="#C15F3C"/><text x="36" y="43" text-anchor="middle" font-size="20" font-weight="700" fill="#fff">1</text>
+    <text x="66" y="42" font-size="18" font-weight="700" fill="#111">Copy the link</text>
+    <rect x="20" y="80" width="240" height="40" rx="8" fill="#EEF5FD" stroke="#4796E3"/>
+    <text x="34" y="105" font-size="12" fill="#4796E3" font-weight="700">github.com/alphalifejourney/</text>
+    <text x="34" y="150" font-size="14" fill="#333">This page's address.</text>
+    <text x="34" y="174" font-size="14" fill="#333">Nothing to download.</text>
+  </g>
+
+  <!-- Step 2 -->
+  <g transform="translate(340,70)">
+    <rect width="280" height="260" rx="14" fill="#FAFAFA" stroke="#DDD"/>
+    <circle cx="36" cy="36" r="20" fill="#C15F3C"/><text x="36" y="43" text-anchor="middle" font-size="20" font-weight="700" fill="#fff">2</text>
+    <text x="66" y="42" font-size="18" font-weight="700" fill="#111">Paste in Claude Code</text>
+    <rect x="20" y="70" width="240" height="110" rx="8" fill="#111"/>
+    <text x="34" y="98" font-size="13" fill="#74AA9C">&gt;</text>
+    <text x="50" y="98" font-size="12" fill="#fff">github.com/alphalifejourney/</text>
+    <text x="50" y="116" font-size="12" fill="#fff">explainer-short</text>
+    <text x="50" y="140" font-size="12" fill="#fff">Install this skill for me</text>
+    <text x="34" y="214" font-size="14" fill="#333">Claude installs it and checks</text>
+    <text x="34" y="236" font-size="14" fill="#333">what your computer needs.</text>
+  </g>
+
+  <!-- Step 3 -->
+  <g transform="translate(650,70)">
+    <rect width="280" height="260" rx="14" fill="#FAFAFA" stroke="#DDD"/>
+    <circle cx="36" cy="36" r="20" fill="#C15F3C"/><text x="36" y="43" text-anchor="middle" font-size="20" font-weight="700" fill="#fff">3</text>
+    <text x="66" y="42" font-size="18" font-weight="700" fill="#111">Ask for a video</text>
+    <rect x="20" y="70" width="240" height="90" rx="8" fill="#fff" stroke="#DDD"/>
+    <text x="34" y="98" font-size="12" fill="#111">"Make an explainer-short on</text>
+    <text x="34" y="118" font-size="12" fill="#111">how to book a table on my</text>
+    <text x="34" y="138" font-size="12" fill="#111">website"</text>
+    <rect x="20" y="180" width="240" height="36" rx="8" fill="#74AA9C"/>
+    <text x="140" y="203" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">final.mp4 (9:16)</text>
+  </g>
+</svg>

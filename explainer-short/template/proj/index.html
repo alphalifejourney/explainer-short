@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&display=swap" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+/* Switzer comes from the Fontshare link above (free, loaded at render time, never shipped).
+   This weight-100 local() face is never used; it only tells the linter the family is declared. */
+@font-face { font-family: 'Switzer'; src: local('Switzer'); font-weight: 100; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: #FFFFFF; }
+#root { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #FFFFFF;
+  font-family: 'Switzer', system-ui, sans-serif; font-weight: 700; letter-spacing: -0.03em; color: #203953; }
+#grid { position: absolute; left: -1200px; top: -1400px; width: 3480px; height: 4720px; background-image: radial-gradient(circle, rgb(226,226,232) 2.1px, transparent 2.6px); }
+#wash { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 80% at 50% 45%, rgba(255,255,255,0) 55%, rgba(32,57,83,0.06) 100%); }
+#stage { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 540px 960px; }
+#world { position: absolute; left: 0; top: 0; width: 2100px; height: 2900px; transform-origin: 0 0; }
+#fog { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: linear-gradient(180deg, #FFFFFF 0%, rgba(255,255,255,0.85) 16%, rgba(255,255,255,0) 40%); }
+#grain { position: absolute; inset: 0; opacity: 0.05; mix-blend-mode: multiply; pointer-events: none; }
+#hud { position: absolute; inset: 0; pointer-events: none; }
+
+.ph { position: absolute; border: 3px dashed #E1E4EB; border-radius: 36px; }
+.cast { position: absolute; border-radius: 40px; background: rgba(32,57,83,0.16); filter: blur(34px); }
+.card { position: absolute; border-radius: 36px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FAFBFD 100%);
+  border: 2px solid #E3E6ED;
+  box-shadow: inset 0 2px 0 #FFFFFF, 0 1px 2px rgba(32,57,83,0.06), 0 10px 20px -6px rgba(32,57,83,0.10), 0 34px 70px -24px rgba(32,57,83,0.22); }
+.ring { position: absolute; inset: -12px; border-radius: 46px; border: 5px solid #288034; opacity: 0; }
+.hd { position: absolute; left: 32px; top: 30px; height: 68px; display: flex; align-items: center; gap: 20px; }
+.chip { width: 68px; height: 68px; border-radius: 20px; background: #F1F3F8; color: #203953;
+  display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1.5px #E6E9F0; }
+.chip svg { width: 36px; height: 36px; }
+.lbl { font-size: 54px; font-weight: 800; letter-spacing: -0.035em; line-height: 1; white-space: nowrap; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: -0.01em; white-space: nowrap; line-height: 1; }
+.wire { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.pkt { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #8FD19A 0%, #288034 55%, #1F6A2A 100%);
+  border: 5px solid #FFFFFF; box-shadow: 0 4px 12px rgba(40,128,52,0.45), 0 0 0 2px rgba(40,128,52,0.18); opacity: 0; }
+.pkt.sm { width: 24px; height: 24px; margin: -12px 0 0 -12px; border-width: 4px; }
+.ok { display: inline-flex; align-items: center; justify-content: center; height: 64px; padding: 0 26px; border-radius: 32px;
+  background: #288034; color: #FFFFFF; font-size: 34px; }
+.mask { position: absolute; overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="33.78" data-width="1080" data-height="1920">
+  <div id="stage"><div id="grid"></div><div id="world"></div></div>
+  <div id="fog"></div>
+  <div id="wash"></div>
+  <div id="hud"></div>
+  <audio id="vo" class="clip" src="media/vo.wav" data-start="0" data-duration="33.78" data-track-index="2" data-has-audio="true"></audio>
+  <canvas id="grain" width="540" height="960" style="width:1080px;height:1920px"></canvas>
+</div>
+<script>
+/*
+  explainer-short template (the explainer-diagram v1 format that won the Oct 2026 IG trial-reel test).
+  1080x1920 (9:16), does not loop; length follows the voiceover (media/vo.wav).
+  Colours: navy #203953 (ink) and green #288034 (the one accent). Swap both with scripts/set_colors.py.
+  Card slots keep their internal ids (clone, copy, check, prompt, render); what they say comes from COPY.
+  Beat map (every beat hangs on a spoken word, TM written by build_audio.py):
+    hook        title over the tilted wide diagram; five cards land; wires draw; all cards pulse on the proof word
+    clone  (1)  terminal: command types, argument types, progress fills, tick; packet to card 2
+    copy   (2)  tree: row 2 slides in, row 1 lights, row 3 lands; packet drops to the next row
+    check  (3)  checklist: row 1 ok, row 2 ok, green banner
+    prompt (4)  field: focus, two lines type as they are said, send
+    render (5)  player: pick a look, five dots fill, play, mini copy of the diagram runs, file lands
+    cta         pull out, light sweep, end title + link pill
+  Deterministic: seeded grain (mulberry32); camera and player are pure functions of time.
+*/
+(function () {
+// word-level timing in seconds, written by build_audio.py from the voiceover
+const TM = /*TM*/{"hook":{"v":0.2,"s":0.2,"e":4.5,"d":4.6,"video":1.26,"how":3.6},"clone":{"a":5.45,"v":5.3,"s":5.3,"e":8.44,"d":8.74,"clone":5.9,"url":6.54,"github":8.14},"copy":{"a":9.24,"v":9.09,"s":9.09,"e":12.61,"d":12.91,"copy":10.15,"skills":11.59,"folder":12.03},"check":{"a":13.81,"v":13.66,"s":13.66,"e":16.96,"d":17.26,"node":15.06,"ffmpeg":15.6,"installed":16.56},"prompt":{"a":17.71,"v":17.56,"s":17.56,"e":21.22,"d":21.52,"open":18.9,"code":19.22,"say":19.64,"make":20.22,"motion":20.62},"render":{"a":22.32,"v":22.17,"s":22.17,"e":27.83,"d":28.13,"style":23.47,"answer":24.19,"questions":25.09,"renders":26.33},"cta":{"a":28.13,"v":28.48,"s":28.48,"e":31.98,"free":29.38,"link":31.28,"screen":31.66},"end":33.78}/*TM*/;
+const DUR = TM.end;
+// ---------- COPY: every word on screen. Edit this block for a new topic (limits in references/template-map.md) ----------
+const COPY = {
+  title: 'Install',              // 140 px, one word, <= 8 characters
+  subtitle: 'Claude Video 2',    // 92 px, <= 16 characters
+  chip: '5 steps',               // green pill top right of the title
+  labels: ['Clone', 'Copy', 'Check', 'Prompt', 'Render'],   // one word per card, <= 7 characters
+  icons: ['clone', 'copy', 'check', 'mark', 'render'],      // keys of ICON below, or 'mark' (the asterisk)
+  term: ['git clone', 'github.com/ItsssssJack/claude-video-2'],   // card 1 terminal: command (40 px), argument (27 px, <= 40 chars)
+  tree: [['folder', '~/.claude/skills'], ['folder', 'claude-video-studio'], ['file', 'SKILL.md']],   // card 2: three nested rows
+  checks: ['node 22+', 'ffmpeg'], ready: 'ready',            // card 3: two rows that get an ok pill, then the green banner
+  prompt: ['make me a', 'motion graphic'],                   // card 4: two lines typed as they are said (68 px, <= 14 chars)
+  file: 'final.mp4',                                         // card 5: the file that lands under the player
+  end: 'Free on GitHub',                                     // end title, 118 px, <= 14 characters
+  endUrl: 'github.com/ItsssssJack/claude-video-2',           // end pill, 32 px
+};
+const NAVY = '#203953', GREEN = '#288034', TINT = '#E6F2E8', G1 = '#5B6478', G2 = '#8A93A8', G3 = '#C9CED9', G4 = '#E4E7EE', G5 = '#F4F6FA';
+const TERM = 'linear-gradient(180deg, #284669 0%, #203953 100%)';
+const world = document.getElementById('world');
+const stage = document.getElementById('stage');
+const grid = document.getElementById('grid');
+const fog = document.getElementById('fog');
+const hud = document.getElementById('hud');
+const tl = gsap.timeline({ paused: true });
+window.__timelines = window.__timelines || {};
+window.__timelines['main'] = tl;
+
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+(function () { const c = document.getElementById('grain'), x = c.getContext('2d'), r = mulberry32(8);
+  const im = x.createImageData(540, 960); for (let i = 0; i < im.data.length; i += 4) { const v = 120 + r() * 135 | 0;
+  im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; } x.putImageData(im, 0, 0); })();
+
+function el(parent, css, cls, html) { const e = document.createElement('div'); if (cls) e.className = cls;
+  e.style.position = 'absolute'; Object.assign(e.style, css || {}); if (html != null) e.innerHTML = html; parent.appendChild(e); return e; }
+const px = v => v + 'px';
+
+// ---------- icons ----------
+const S = 'fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"';
+const ICON = {
+  clone: `<svg viewBox="0 0 32 32" ${S}><path d="M16 5v14M10 13.5l6 6 6-6"/><path d="M5 20v3.5A3.5 3.5 0 0 0 8.5 27h15a3.5 3.5 0 0 0 3.5-3.5V20"/></svg>`,
+  copy: `<svg viewBox="0 0 32 32" ${S}><path d="M4.5 10a3 3 0 0 1 3-3h5.5l3 3.5h8.5a3 3 0 0 1 3 3v9.5a3 3 0 0 1-3 3h-17a3 3 0 0 1-3-3z"/></svg>`,
+  check: `<svg viewBox="0 0 32 32" ${S}><rect x="5" y="5" width="22" height="22" rx="5"/><path d="M10.5 16.5l4 4 7-8"/></svg>`,
+  render: `<svg viewBox="0 0 32 32" ${S}><rect x="4" y="6" width="24" height="20" rx="5"/><path d="M13.5 11.5v9l7.5-4.5z" fill="currentColor"/></svg>`,
+  folder: `<svg viewBox="0 0 32 32" ${S}><path d="M4.5 10a3 3 0 0 1 3-3h5.5l3 3.5h8.5a3 3 0 0 1 3 3v9.5a3 3 0 0 1-3 3h-17a3 3 0 0 1-3-3z"/></svg>`,
+  file: `<svg viewBox="0 0 32 32" ${S}><path d="M9 4.5h9l6.5 6.5v14a2.5 2.5 0 0 1-2.5 2.5H9A2.5 2.5 0 0 1 6.5 25V7A2.5 2.5 0 0 1 9 4.5z"/><path d="M18 4.5V11h6.5"/></svg>`,
+  send: `<svg viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 25V8M8.5 15 16 7.5l7.5 7.5"/></svg>`,
+  tick: `<svg viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16.5l5.5 5.5L24.5 10"/></svg>`,
+};
+// a plain 8-ray asterisk, in navy (no second accent)
+const MARK_SVG = c => `<svg viewBox="0 0 100 100" width="100%" height="100%"><g stroke="${c}" stroke-width="11" stroke-linecap="round">${[0, 45, 90, 135].map(a => `<line x1="50" y1="9" x2="50" y2="91" transform="rotate(${a} 50 50)"/>`).join('')}</g></svg>`;
+
+// ---------- layout (world px): a Z, two columns, Render wide at the bottom ----------
+const N = {
+  clone:  { cx: 600,  cy: 500,  w: 780,  h: 600, icon: COPY.icons[0], label: COPY.labels[0] },
+  copy:   { cx: 1500, cy: 500,  w: 780,  h: 600, icon: COPY.icons[1], label: COPY.labels[1] },
+  check:  { cx: 600,  cy: 1400, w: 780,  h: 600, icon: COPY.icons[2], label: COPY.labels[2] },
+  prompt: { cx: 1500, cy: 1400, w: 780,  h: 600, icon: COPY.icons[3], label: COPY.labels[3] },
+  render: { cx: 1050, cy: 2400, w: 1100, h: 860, icon: COPY.icons[4], label: COPY.labels[4] },
+};
+for (const k in N) { const n = N[k]; n.x = n.cx - n.w / 2; n.y = n.cy - n.h / 2; }
+
+const pool = el(world, { left: '0px', top: '0px', width: '1400px', height: '1100px', borderRadius: '50%',
+  background: 'radial-gradient(closest-side, rgba(40,128,52,0.13), rgba(40,128,52,0.05) 55%, rgba(40,128,52,0) 100%)' });
+gsap.set(pool, { x: N.clone.cx - 700, y: N.clone.cy - 550, opacity: 0 });
+
+const svgNS = 'http://www.w3.org/2000/svg';
+const svg = document.createElementNS(svgNS, 'svg');
+svg.setAttribute('width', 2100); svg.setAttribute('height', 2900); svg.setAttribute('viewBox', '0 0 2100 2900');
+Object.assign(svg.style, { position: 'absolute', left: 0, top: 0, overflow: 'visible' });
+world.appendChild(svg);
+
+function rounded(pts, r) {
+  let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], [cx, cy] = pts[i + 1];
+    const l1 = Math.hypot(bx - ax, by - ay), l2 = Math.hypot(cx - bx, cy - by);
+    const rr = Math.min(r, l1 / 2, l2 / 2);
+    const p1 = [bx - (bx - ax) / l1 * rr, by - (by - ay) / l1 * rr], p2 = [bx + (cx - bx) / l2 * rr, by + (cy - by) / l2 * rr];
+    d += ` L${p1[0]} ${p1[1]} Q${bx} ${by} ${p2[0]} ${p2[1]}`;
+  }
+  const e = pts[pts.length - 1]; return d + ` L${e[0]} ${e[1]}`;
+}
+function mk(tag, attrs) { const e = document.createElementNS(svgNS, tag); for (const a in attrs) e.setAttribute(a, attrs[a]); return e; }
+
+const WIRES = {};
+function wire(id, pts, r) {
+  const d = rounded(pts, r);
+  const g = mk('g', {}); svg.appendChild(g);
+  const under = mk('path', { d, class: 'wire', stroke: '#FFFFFF', 'stroke-width': 16 });
+  const track = mk('path', { d, class: 'wire', stroke: '#CDD2DC', 'stroke-width': 6 });
+  const lit = mk('path', { d, class: 'wire', stroke: GREEN, 'stroke-width': 6 });
+  const trail = mk('path', { d, class: 'wire', stroke: GREEN, 'stroke-width': 10, opacity: 0.0 });
+  g.appendChild(under); g.appendChild(track); g.appendChild(lit); g.appendChild(trail);
+  const L = track.getTotalLength();
+  [under, track, lit].forEach(p => { p.setAttribute('stroke-dasharray', `${L} ${L}`); p.setAttribute('stroke-dashoffset', L); });
+  trail.setAttribute('stroke-dasharray', `0 ${L * 2}`);
+  const a = pts[0], b = pts[pts.length - 1];
+  const p0 = mk('circle', { cx: a[0], cy: a[1], r: 11, fill: '#fff', stroke: '#CDD2DC', 'stroke-width': 5, opacity: 0 });
+  const p1 = mk('circle', { cx: b[0], cy: b[1], r: 11, fill: '#fff', stroke: '#CDD2DC', 'stroke-width': 5, opacity: 0 });
+  g.appendChild(p0); g.appendChild(p1);
+  const NS = 600, pts2 = [];
+  for (let i = 0; i <= NS; i++) { const q = track.getPointAtLength(L * i / NS); pts2.push([q.x, q.y]); }
+  const at = l => { const f = Math.max(0, Math.min(NS, l / L * NS)), i = Math.min(NS - 1, Math.floor(f)), r = f - i;
+    return { x: pts2[i][0] + (pts2[i + 1][0] - pts2[i][0]) * r, y: pts2[i][1] + (pts2[i + 1][1] - pts2[i][1]) * r }; };
+  return WIRES[id] = { d, under, track, lit, trail, L, p0, p1, at };
+}
+const P = N;
+wire('c1', [[P.clone.x + P.clone.w, 500], [P.copy.x, 500]], 0);
+wire('c2', [[1500, P.copy.y + P.copy.h], [1500, 950], [600, 950], [600, P.check.y]], 72);
+wire('c3', [[P.check.x + P.check.w, 1400], [P.prompt.x, 1400]], 0);
+wire('c4', [[1500, P.prompt.y + P.prompt.h], [1500, 1840], [1050, 1840], [1050, P.render.y]], 56);
+
+// ---------- nodes ----------
+const NODES = {};
+function node(id) {
+  const n = N[id];
+  const ph = el(world, { left: px(n.x), top: px(n.y), width: px(n.w), height: px(n.h) }, 'ph');
+  const cast = el(world, { left: px(n.x + 30), top: px(n.y + 50), width: px(n.w - 60), height: px(n.h - 40), opacity: 0 }, 'cast');
+  const card = el(world, { left: px(n.x), top: px(n.y), width: px(n.w), height: px(n.h) }, 'card');
+  const ring = el(card, {}, 'ring');
+  const hd = el(card, {}, 'hd');
+  const chip = el(hd, { position: 'relative' }, 'chip', n.icon === 'mark' ? '' : ICON[n.icon]);
+  if (n.icon === 'mark') el(chip, { position: 'relative', width: '38px', height: '38px' }, '', MARK_SVG('currentColor'));
+  const lbl = el(hd, { position: 'relative' }, 'lbl', n.label);
+  gsap.set(card, { opacity: 0, y: 60, scale: 0.9, transformOrigin: '50% 60%' });
+  gsap.set([chip, lbl], { opacity: 0, x: -18 });
+  return NODES[id] = { n, ph, cast, card, ring, chip, lbl };
+}
+Object.keys(N).forEach(node);
+
+// typed text: a clipped line that reveals left to right in steps
+function typed(parent, css, text, cls) {
+  const e = el(parent, Object.assign({ clipPath: 'inset(-10% 100% -10% 0%)' }, css), 'mono' + (cls ? ' ' + cls : ''), text);
+  return e;
+}
+function type(e, t, dur, steps) { tl.to(e, { clipPath: 'inset(-10% 0% -10% 0%)', duration: dur, ease: `steps(${steps})` }, t); }
+
+// ----- Clone: a terminal -----
+const CLc = NODES.clone.card;
+const term = el(CLc, { left: '32px', top: '128px', width: '716px', height: '440px', borderRadius: '24px', overflow: 'hidden',
+  background: TERM, boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.08)' });
+[0, 1, 2].forEach(i => el(term, { left: px(28 + i * 24), top: '26px', width: '13px', height: '13px', borderRadius: '50%', background: '#3E5A7C' }));
+el(term, { left: '32px', top: '82px', fontSize: '40px', color: GREEN, fontWeight: 700 }, 'mono', '$');
+const tl1 = typed(term, { left: '74px', top: '82px', fontSize: '40px', color: '#F2F5F9', fontWeight: 700 }, COPY.term[0]);
+const tl2 = typed(term, { left: '32px', top: '146px', fontSize: '27px', color: '#B9C7DA', fontWeight: 500 }, COPY.term[1]);
+const outBars = [[0, 300], [1, 220], [2, 260]].map(([i, w]) => el(term, { left: '32px', top: px(214 + i * 34), width: px(w), height: '14px', borderRadius: '7px', background: '#3E5A7C', opacity: 0 }));
+const prog = el(term, { left: '32px', top: '346px', width: '540px', height: '14px', borderRadius: '7px', background: '#33506F', opacity: 0 });
+const progFill = el(prog, { left: 0, top: 0, width: '0px', height: '14px', borderRadius: '7px', background: GREEN });
+const cloneTick = el(term, { left: '600px', top: '316px', width: '76px', height: '76px', borderRadius: '50%', background: GREEN,
+  boxShadow: '0 10px 24px -8px rgba(40,128,52,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0 }, '', ICON.tick);
+cloneTick.firstChild.style.width = '40px'; cloneTick.firstChild.style.height = '40px';
+gsap.set(cloneTick, { scale: 0.6 });
+
+// ----- Copy: a folder tree -----
+const COc = NODES.copy.card;
+const tree = el(COc, { left: '32px', top: '128px', width: '716px', height: '440px', borderRadius: '24px', background: G5, boxShadow: 'inset 0 0 0 2px #E6E9F0' });
+function treeRow(y, indent, icon, text, size) {
+  const r = el(tree, { left: px(32 + indent), top: px(y), height: '84px', display: 'flex', alignItems: 'center', gap: '18px', paddingRight: '24px', borderRadius: '20px' });
+  const ic = el(r, { position: 'relative', width: '60px', height: '60px', borderRadius: '16px', background: '#FFFFFF', color: NAVY,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 0 1.5px #E3E6ED' }, '', ICON[icon]);
+  ic.firstChild.style.width = '32px'; ic.firstChild.style.height = '32px';
+  el(r, { position: 'relative', fontSize: px(size || 34), color: NAVY, fontWeight: 700 }, 'mono', text);
+  return { r, ic };
+}
+const row1 = treeRow(40, 0, COPY.tree[0][0], COPY.tree[0][1]);
+const row2 = treeRow(170, 56, COPY.tree[1][0], COPY.tree[1][1]);
+const row3 = treeRow(300, 112, COPY.tree[2][0], COPY.tree[2][1]);
+// tree connectors
+const tsv = `<svg width="716" height="440" fill="none" stroke="${G3}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <path id="tc1" d="M94 126 V196 Q94 212 110 212 H120"/><path id="tc2" d="M150 256 V326 Q150 342 166 342 H176"/></svg>`;
+const tcon = el(tree, { left: 0, top: 0, width: '716px', height: '440px' }, '', tsv);
+const tc = [tcon.querySelector('#tc1'), tcon.querySelector('#tc2')];
+tc.forEach(p => { const L = p.getTotalLength(); p.setAttribute('stroke-dasharray', `${L} ${L}`); p.setAttribute('stroke-dashoffset', L); p._L = L; });
+tree.appendChild(row1.r); tree.appendChild(row2.r); tree.appendChild(row3.r);
+gsap.set([row2.r, row3.r], { opacity: 0, x: 90 });
+
+// ----- Check: doctor output -----
+const CHc = NODES.check.card;
+const doc = el(CHc, { left: '32px', top: '128px', width: '716px', height: '440px', borderRadius: '24px', background: G5, boxShadow: 'inset 0 0 0 2px #E6E9F0' });
+function docRow(y, text) {
+  const r = el(doc, { left: '28px', top: px(y), width: '660px', height: '104px', borderRadius: '22px', background: '#FFFFFF', boxShadow: 'inset 0 0 0 2px #E3E6ED' });
+  const t = typed(r, { left: '32px', top: '33px', fontSize: '40px', color: NAVY, fontWeight: 700 }, text);
+  const ok = el(r, { right: '20px', top: '20px' }, 'ok mono', 'ok');
+  gsap.set(ok, { opacity: 0, scale: 0.7 });
+  return { r, t, ok };
+}
+const dn = docRow(32, COPY.checks[0]);
+const df = docRow(156, COPY.checks[1]);
+const ready = el(doc, { left: '28px', top: '296px', width: '660px', height: '112px', borderRadius: '24px', background: GREEN,
+  boxShadow: '0 16px 32px -14px rgba(40,128,52,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', color: '#fff', opacity: 0 });
+const rtk = el(ready, { position: 'relative', width: '48px', height: '48px' }, '', ICON.tick);
+rtk.firstChild.style.width = '48px'; rtk.firstChild.style.height = '48px';
+el(ready, { position: 'relative', fontSize: '48px', fontWeight: 700 }, 'mono', COPY.ready);
+gsap.set(ready, { scale: 0.9, y: 20 });
+
+// ----- Prompt: a message field -----
+const PRc = NODES.prompt.card;
+const field = el(PRc, { left: '32px', top: '128px', width: '716px', height: '440px', borderRadius: '28px', background: G5, boxShadow: 'inset 0 0 0 2px #E6E9F0' });
+const pl1 = el(field, { left: '44px', top: '58px', fontSize: '68px', fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1, color: NAVY, whiteSpace: 'nowrap', clipPath: 'inset(-20% 100% -20% 0%)' }, '', COPY.prompt[0]);
+const pl2 = el(field, { left: '44px', top: '146px', fontSize: '68px', fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1, color: NAVY, whiteSpace: 'nowrap', clipPath: 'inset(-20% 100% -20% 0%)' }, '', COPY.prompt[1]);
+const pcaret = el(field, { left: '44px', top: '58px', width: '6px', height: '70px', borderRadius: '3px', background: GREEN });
+const send = el(field, { right: '28px', bottom: '28px', width: '104px', height: '104px', borderRadius: '50%', background: GREEN,
+  boxShadow: '0 12px 26px -8px rgba(40,128,52,0.65), inset 0 2px 0 rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }, '', ICON.send);
+send.firstChild.style.width = '48px'; send.firstChild.style.height = '48px';
+const sendRing = el(field, { right: '28px', bottom: '28px', width: '104px', height: '104px', borderRadius: '50%', border: '5px solid ' + GREEN, opacity: 0 });
+const pmark = el(field, { left: '44px', bottom: '40px', width: '64px', height: '64px' }, '', MARK_SVG(G3));
+
+// ----- Render: a player that plays a mini copy of this diagram -----
+const REc = NODES.render.card;
+const player = el(REc, { left: '32px', top: '128px', width: '1036px', height: '600px', borderRadius: '26px', overflow: 'hidden', background: TERM });
+const MW = 1036, MH = 600;
+const mini = [
+  { x: 150, y: 56, w: 330, h: 150 }, { x: 556, y: 56, w: 330, h: 150 },
+  { x: 556, y: 246, w: 330, h: 150 }, { x: 150, y: 246, w: 330, h: 150 },
+  { x: 318, y: 430, w: 400, h: 110 },
+];
+const mpath = `M480 131 H556 M886 131 Q930 131 930 175 V277 Q930 321 886 321 M556 321 H480 M315 396 V413 Q315 430 345 430`;
+const minisvg = el(player, { left: 0, top: 0, width: px(MW), height: px(MH) }, '',
+  `<svg width="${MW}" height="${MH}"><path d="${mpath}" fill="none" stroke="#3E5A7C" stroke-width="5" stroke-linecap="round"/>
+   <path id="mlit" d="M480 131 H556 L886 131 Q930 131 930 175 V277 Q930 321 886 321 L556 321 H480 L315 321 V396 Q315 430 345 430" fill="none" stroke="${GREEN}" stroke-width="5" stroke-linecap="round"/></svg>`);
+const mlit = minisvg.querySelector('#mlit'); const mL = mlit.getTotalLength();
+const MPTS = []; for (let i = 0; i <= 400; i++) { const q = mlit.getPointAtLength(mL * i / 400); MPTS.push([q.x, q.y]); }
+const mAt = u => { const f = Math.max(0, Math.min(400, u * 400)), i = Math.min(399, Math.floor(f)), r = f - i;
+  return { x: MPTS[i][0] + (MPTS[i + 1][0] - MPTS[i][0]) * r, y: MPTS[i][1] + (MPTS[i + 1][1] - MPTS[i][1]) * r }; };
+mlit.setAttribute('stroke-dasharray', `${mL} ${mL}`); mlit.setAttribute('stroke-dashoffset', mL);
+const minis = mini.map((m, i) => {
+  const b = el(player, { left: px(m.x), top: px(m.y), width: px(m.w), height: px(m.h), borderRadius: '20px', background: '#FFFFFF', opacity: 0 });
+  el(b, { left: '20px', top: '20px', width: '40px', height: '40px', borderRadius: '12px', background: TINT });
+  el(b, { left: '74px', top: '28px', width: px(i === 4 ? 140 : 120), height: '24px', borderRadius: '12px', background: NAVY });
+  if (i < 4) el(b, { left: '20px', top: '82px', width: px(m.w - 40), height: '44px', borderRadius: '12px', background: G5 });
+  gsap.set(b, { scale: 0.85, y: 24 });
+  return b;
+});
+const mdot = el(player, { left: 0, top: 0, width: '26px', height: '26px', marginLeft: '-13px', marginTop: '-13px', borderRadius: '50%', background: GREEN, border: '4px solid #fff', opacity: 0 });
+const vtrack = el(player, { left: '32px', top: '566px', width: '972px', height: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.18)' });
+const vfill = el(vtrack, { left: 0, top: 0, width: '0px', height: '8px', borderRadius: '4px', background: GREEN });
+const play = el(player, { left: px(MW / 2 - 70), top: px(MH / 2 - 70), width: '140px', height: '140px', borderRadius: '50%', background: GREEN,
+  boxShadow: '0 16px 36px -8px rgba(40,128,52,0.7), inset 0 3px 0 rgba(255,255,255,0.3)' },
+  '', `<svg width="140" height="140" viewBox="0 0 140 140"><path d="M58 46v48l38-24z" fill="#fff" stroke="#fff" stroke-width="6" stroke-linejoin="round"/></svg>`);
+gsap.set(play, { opacity: 0, scale: 0.8 });
+// picker: "pick a style" (four looks, one gets chosen), "answer five quick questions" (five dots fill)
+const picker = el(player, { left: 0, top: 0, width: px(MW), height: px(MH) });
+const LOOK = [
+  t => { el(t, { left: '22px', top: '26px', width: '96px', height: '16px', borderRadius: '8px', background: '#fff' });
+         el(t, { left: '22px', top: '54px', width: '60px', height: '12px', borderRadius: '6px', background: '#6F86A3' });
+         el(t, { right: '22px', bottom: '22px', width: '44px', height: '44px', borderRadius: '50%', background: '#fff' }); },
+  t => { el(t, { left: '20px', top: '24px', width: '66px', height: '40px', borderRadius: '10px', background: '#fff' });
+         el(t, { left: '110px', top: '24px', width: '66px', height: '40px', borderRadius: '10px', background: '#fff' });
+         el(t, { left: '86px', top: '42px', width: '24px', height: '4px', borderRadius: '2px', background: GREEN });
+         el(t, { left: '64px', top: '80px', width: '66px', height: '30px', borderRadius: '10px', background: '#fff' }); },
+  t => { el(t, { left: '-30px', top: '30px', width: '150px', height: '150px', borderRadius: '50%', background: '#4A6789' });
+         el(t, { right: '22px', top: '26px', width: '70px', height: '14px', borderRadius: '7px', background: '#fff' }); },
+  t => { [0, 1, 2, 3].forEach(i => el(t, { left: px(22 + i * 40), top: px(22 + (i % 2) * 18), width: '24px', height: '70px', borderRadius: '8px', background: i === 1 ? '#fff' : '#6F86A3' })); },
+];
+const looks = LOOK.map((draw, i) => {
+  const t = el(picker, { left: px(81 + i * 226), top: '130px', width: '196px', height: '132px', borderRadius: '18px', background: '#2E4C70', overflow: 'hidden' });
+  draw(t); return t;
+});
+const lookRing = el(picker, { left: px(81 + 226 - 9), top: '121px', width: '214px', height: '150px', borderRadius: '24px', border: '5px solid ' + GREEN, opacity: 0 });
+const qdots = [0, 1, 2, 3, 4].map(i => el(picker, { left: px(381 + i * 60), top: '360px', width: '34px', height: '34px', borderRadius: '50%', background: 'rgba(255,255,255,0.16)' }));
+const file = el(REc, { left: '32px', top: '760px', height: '72px', display: 'flex', alignItems: 'center', gap: '18px', opacity: 0 });
+const fic = el(file, { position: 'relative', width: '68px', height: '68px', borderRadius: '20px', background: TINT, color: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center' }, '', ICON.render);
+fic.firstChild.style.width = '36px'; fic.firstChild.style.height = '36px';
+el(file, { position: 'relative', fontSize: '44px', color: NAVY, fontWeight: 700 }, 'mono', COPY.file);
+gsap.set(file, { x: -30 });
+const rcheck = el(REc, { right: '-28px', top: '-28px', width: '96px', height: '96px', borderRadius: '50%', background: GREEN,
+  boxShadow: '0 0 0 7px #fff, 0 12px 26px -6px rgba(40,128,52,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0 }, '', ICON.tick);
+rcheck.firstChild.style.width = '50px'; rcheck.firstChild.style.height = '50px';
+gsap.set(rcheck, { scale: 0.6 });
+
+// ---------- HUD (screen space) ----------
+// intro title
+const t1m = el(hud, { left: '72px', top: '110px', width: '940px', height: '150px' }, 'mask');
+const t1 = el(t1m, { left: 0, top: 0, fontSize: '140px', fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1.05, color: NAVY }, '', COPY.title);
+const t2m = el(hud, { left: '72px', top: '256px', width: '940px', height: '110px' }, 'mask');
+const t2 = el(t2m, { left: 0, top: 0, fontSize: '92px', fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1.1, color: NAVY }, '', COPY.subtitle);
+const stepsChip = el(hud, { left: '760px', top: '134px', height: '76px', padding: '0 30px', borderRadius: '38px', background: GREEN, color: '#fff',
+  display: 'flex', alignItems: 'center', fontSize: '40px', fontWeight: 800 }, '', COPY.chip);
+gsap.set(t1, { y: 160 }); gsap.set(t2, { y: 120 }); gsap.set(stepsChip, { opacity: 0, y: 24 });
+// step counter
+const ctr = el(hud, { left: '72px', top: '320px', height: '96px', padding: '0 34px 0 30px', borderRadius: '48px', background: '#FFFFFF',
+  boxShadow: 'inset 0 0 0 2px #E3E6ED, 0 14px 34px -14px rgba(32,57,83,0.28)', display: 'flex', alignItems: 'center', gap: '18px', opacity: 0 });
+const ctrNum = el(ctr, { position: 'relative', width: '76px', height: '64px', overflow: 'hidden' });
+const nums = [1, 2, 3, 4, 5].map(i => el(ctrNum, { left: 0, top: '4px', fontSize: '56px', color: GREEN, fontWeight: 700 }, 'mono', '0' + i));
+nums.forEach((n, i) => gsap.set(n, { y: i === 0 ? 0 : 70 }));
+const dots = [0, 1, 2, 3, 4].map(i => el(ctr, { position: 'relative', width: '64px', height: '10px', borderRadius: '5px', background: G4 }));
+const dotFill = dots.map(d => el(d, { left: 0, top: 0, width: '100%', height: '10px', borderRadius: '5px', background: GREEN, transformOrigin: '0 50%' }));
+dotFill.forEach(f => gsap.set(f, { scaleX: 0 }));
+// end card
+const e1m = el(hud, { left: '72px', top: '118px', width: '940px', height: '140px' }, 'mask');
+const e1 = el(e1m, { left: 0, top: 0, fontSize: '118px', fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1.1, color: NAVY }, '', COPY.end);
+gsap.set(e1, { y: 150 });
+const url = el(hud, { left: '72px', top: '284px', height: '88px', padding: '0 34px', borderRadius: '44px', background: '#FFFFFF',
+  border: '4px solid ' + GREEN, boxShadow: '0 18px 40px -16px rgba(40,128,52,0.5)', display: 'flex', alignItems: 'center',
+  fontSize: '32px', color: NAVY, fontWeight: 700, opacity: 0 }, 'mono', COPY.endUrl);
+gsap.set(url, { y: 30 });
+
+// ---------- timeline helpers ----------
+function land(id, t) {
+  const o = NODES[id];
+  tl.to(o.card, { opacity: 1, y: 0, scale: 1, duration: 0.55, ease: 'power3.out' }, t);
+  tl.to(o.cast, { opacity: 1, duration: 0.6, ease: 'power2.out' }, t + 0.1);
+  tl.to(o.ph, { opacity: 0, duration: 0.3, ease: 'power1.in' }, t);
+  tl.to([o.chip, o.lbl], { opacity: 1, x: 0, duration: 0.45, ease: 'power3.out', stagger: 0.07 }, t + 0.12);
+}
+function pulse(id, t, soft) {
+  const o = NODES[id];
+  tl.set(o.ring, { opacity: 0.95, scale: 0.985 }, t);
+  tl.to(o.ring, { opacity: 0, scale: 1.05, duration: 0.7, ease: 'power2.out' }, t);
+  if (!soft) {
+    tl.to(o.card, { scale: 1.025, duration: 0.1, ease: 'power2.out' }, t);
+    tl.to(o.card, { scale: 1, duration: 0.5, ease: 'back.out(3)' }, t + 0.1);
+  }
+  tl.to(o.chip, { backgroundColor: GREEN, color: '#FFFFFF', duration: 0.12, ease: 'power2.out' }, t);
+  tl.to(o.cast, { backgroundColor: 'rgba(40,128,52,0.34)', duration: 0.15, ease: 'power2.out' }, t);
+  tl.to(o.cast, { backgroundColor: 'rgba(32,57,83,0.16)', duration: 1.0, ease: 'power2.inOut' }, t + 0.35);
+  tl.to(o.chip, { backgroundColor: TINT, color: GREEN, duration: 0.5, ease: 'power2.inOut' }, t + 0.4);
+}
+function drawWire(id, t, dur, ease) {
+  const w = WIRES[id];
+  tl.to([w.under, w.track], { attr: { 'stroke-dashoffset': 0 }, duration: dur, ease: ease || 'power2.inOut' }, t);
+  tl.to(w.p0, { attr: { opacity: 1 }, duration: 0.15 }, t);
+  tl.to(w.p1, { attr: { opacity: 1 }, duration: 0.15 }, t + dur * 0.8);
+}
+function packet(id, t, dur, opts) {
+  opts = opts || {};
+  const w = WIRES[id];
+  const dot = el(world, {}, 'pkt' + (opts.small ? ' sm' : ''));
+  const pr = { u: 0 };
+  const TR = opts.small ? 0 : 220;
+  tl.to(pr, { u: 1, duration: dur, ease: opts.ease || 'power2.inOut', onUpdate: () => {
+    const u = pr.u, on = u > 0 && u < 1;
+    const l = u * w.L, p = w.at(l);
+    dot.style.transform = `translate(${p.x}px, ${p.y}px)`;
+    dot.style.opacity = on ? (opts.small ? Math.min(1, u * 8, (1 - u) * 8) * 0.95 : 1) : 0;
+    if (TR) { const tlen = Math.min(TR, l); w.trail.setAttribute('stroke-dasharray', `${tlen} ${w.L * 2}`);
+      w.trail.setAttribute('stroke-dashoffset', -(l - tlen)); w.trail.setAttribute('opacity', on ? 0.35 : 0); }
+    if (opts.lit) w.lit.setAttribute('stroke-dashoffset', w.L - l);
+  } }, t);
+  if (opts.lit) { tl.to(w.lit, { attr: { opacity: 0.32 }, duration: 0.8, ease: 'power2.inOut' }, t + dur + 0.05); }
+  if (!opts.small) { tl.to(w.p1, { attr: { stroke: GREEN, fill: GREEN }, duration: 0.15 }, t + dur - 0.05); }
+}
+function poolTo(id, t, dur) { const n = N[id]; tl.to(pool, { x: n.cx - 700, y: n.cy - 550, duration: dur, ease: 'power2.inOut' }, t); }
+function step(i, t) {
+  if (i === 0) { tl.to(ctr, { opacity: 1, duration: 0.3, ease: 'power2.out' }, t); }
+  else { tl.to(nums[i - 1], { y: -70, duration: 0.4, ease: 'power3.inOut' }, t); tl.to(nums[i], { y: 0, duration: 0.4, ease: 'power3.inOut' }, t); }
+  tl.to(dotFill[i], { scaleX: 1, duration: 0.5, ease: 'power3.out' }, t + 0.05);
+}
+
+// ---------- BEATS: every beat sits on a word of the voiceover (TM, written by build_audio.py) ----------
+// TM.<card>: a = camera arrives, v = voice clip starts, s / e = first / last word, d = camera leaves,
+// plus one time per cue word (TM.check.node is when "Node" is said).
+const H = TM.hook, C1 = TM.clone, C2 = TM.copy, C3 = TM.check, C4 = TM.prompt, C5 = TM.render, CT = TM.cta;
+
+// hook: title, cards land, wires draw; "whole video" pulses the machine; "here's how" brings the 5 steps chip
+gsap.set(t1, { y: 60 }); gsap.set(t2, { y: 80 });
+tl.to(t1, { y: 0, duration: 0.6, ease: 'power3.out' }, 0);
+tl.to(t2, { y: 0, duration: 0.6, ease: 'power3.out' }, 0.12);
+['clone', 'copy', 'check', 'prompt', 'render'].forEach((id, i) => land(id, 0.25 + i * 0.16));
+drawWire('c1', 0.9, 0.3); drawWire('c2', 1.0, 0.6); drawWire('c3', 1.3, 0.3); drawWire('c4', 1.45, 0.5);
+tl.to(pool, { opacity: 1, duration: 0.8, ease: 'power2.out' }, 1.6);
+['clone', 'copy', 'check', 'prompt', 'render'].forEach((id, i) => pulse(id, H.video + i * 0.1));
+tl.to(stepsChip, { opacity: 1, y: 0, duration: 0.45, ease: 'back.out(2)' }, H.how - 0.1);
+[['c1', 0], ['c2', 0.2], ['c3', 0.4], ['c4', 0.6]].forEach(([id, o]) => {
+  for (let t = 2.2 + o; t + 1.0 < H.d; t += 0.8) packet(id, t, id === 'c2' || id === 'c4' ? 0.9 : 0.5, { small: true, ease: 'none' });
+});
+tl.to([t1, t2], { y: -170, duration: 0.5, ease: 'power3.in', stagger: 0.06 }, H.d - 0.1);
+tl.to(stepsChip, { opacity: 0, y: -30, duration: 0.35, ease: 'power2.in' }, H.d - 0.1);
+
+// Clone: "clone" types the command, "Claude Video 2 repo from GitHub" types the address, then it downloads
+pulse('clone', C1.a - 0.1, true); step(0, C1.a - 0.3);
+type(tl1, C1.clone, 0.35, COPY.term[0].length);
+type(tl2, C1.url, Math.max(0.5, C1.github - C1.url + 0.2), Math.min(14, COPY.term[1].length));
+tl.to(outBars, { opacity: 1, duration: 0.12, stagger: 0.08 }, C1.github);
+tl.to(prog, { opacity: 1, duration: 0.15 }, C1.github);
+tl.to(progFill, { width: 540, duration: Math.max(0.35, C1.e - C1.github), ease: 'power2.inOut' }, C1.github + 0.05);
+tl.to(cloneTick, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(2.5)' }, C1.e);
+packet('c1', C1.d, C2.a - C1.d, { lit: true });
+poolTo('copy', C1.d, 0.6);
+
+// Copy: "copy the folder" slides it in, "skills" lights the skills folder, the last "folder" lands SKILL.md
+pulse('copy', C2.a - 0.05, true); step(1, C2.a - 0.3);
+tl.to(row2.r, { opacity: 1, x: 0, duration: 0.5, ease: 'power3.out' }, C2.copy);
+tl.to(row2.r, { backgroundColor: TINT, duration: 0.2, ease: 'power2.out' }, C2.copy + 0.05);
+tl.to(row2.ic, { backgroundColor: GREEN, color: '#FFFFFF', duration: 0.2 }, C2.copy + 0.05);
+tl.to(tc[0], { attr: { 'stroke-dashoffset': 0 }, duration: 0.4, ease: 'power2.inOut' }, C2.copy + 0.15);
+tl.to(row1.ic, { backgroundColor: GREEN, color: '#FFFFFF', duration: 0.15 }, C2.skills);
+tl.to(row1.ic, { backgroundColor: TINT, color: GREEN, duration: 0.5, ease: 'power2.inOut' }, C2.skills + 0.4);
+tl.to(row3.r, { opacity: 1, x: 0, duration: 0.45, ease: 'power3.out' }, C2.folder - 0.05);
+tl.to(tc[1], { attr: { 'stroke-dashoffset': 0 }, duration: 0.35, ease: 'power2.inOut' }, C2.folder + 0.05);
+tl.to(row3.ic, { backgroundColor: TINT, color: GREEN, duration: 0.3 }, C2.folder + 0.15);
+packet('c2', C2.d, C3.a - C2.d, { lit: true });
+poolTo('check', C2.d, C3.a - C2.d);
+
+// Check: each line appears as it is said
+pulse('check', C3.a - 0.05, true); step(2, C3.a - 0.3);
+type(dn.t, C3.node - 0.08, 0.3, COPY.checks[0].length);
+tl.to(dn.ok, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(2.5)' }, C3.node + 0.25);
+type(df.t, C3.ffmpeg - 0.08, 0.3, COPY.checks[1].length);
+tl.to(df.ok, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(2.5)' }, C3.ffmpeg + 0.3);
+tl.to(ready, { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: 'back.out(2)' }, C3.installed);
+packet('c3', C3.d, C4.a - C3.d, { lit: true });
+poolTo('prompt', C3.d, 0.6);
+
+// Prompt: "make me a motion graphic" types as it is said, then sends
+pulse('prompt', C4.a - 0.05, true);
+// "open Claude Code and say": the field takes focus, the card answers on "code" and "say"
+tl.to(field, { boxShadow: 'inset 0 0 0 4px #288034', backgroundColor: '#FFFFFF', duration: 0.3, ease: 'power2.out' }, C4.open);
+pulse('prompt', C4.code, true);
+tl.to(pmark, { scale: 1.35, duration: 0.15, ease: 'power2.out' }, C4.say);
+tl.to(pmark, { scale: 1, duration: 0.5, ease: 'back.out(3)' }, C4.say + 0.15);
+tl.to(field, { boxShadow: 'inset 0 0 0 2px #E6E9F0', backgroundColor: G5, duration: 0.5, ease: 'power2.inOut' }, C4.e + 0.1); step(3, C4.a - 0.3);
+tl.to(pcaret, { opacity: 0, duration: 0.1 }, C4.make - 0.05);
+tl.to(pl1, { clipPath: 'inset(-20% 0% -20% 0%)', duration: Math.max(0.3, C4.motion - C4.make), ease: `steps(${COPY.prompt[0].length})` }, C4.make);
+tl.to(pl2, { clipPath: 'inset(-20% 0% -20% 0%)', duration: Math.max(0.35, C4.e - C4.motion), ease: `steps(${COPY.prompt[1].length})` }, C4.motion);
+tl.to(send, { scale: 0.86, duration: 0.08, ease: 'power2.in' }, C4.e + 0.02);
+tl.to(send, { scale: 1, duration: 0.45, ease: 'back.out(4)' }, C4.e + 0.1);
+tl.set(sendRing, { opacity: 0.9, scale: 1 }, C4.e + 0.1);
+tl.to(sendRing, { opacity: 0, scale: 1.6, duration: 0.5, ease: 'power2.out' }, C4.e + 0.1);
+pulse('prompt', C4.e + 0.1, true);
+packet('c4', C4.d, C5.a - C4.d, { lit: true });
+poolTo('render', C4.d, C5.a - C4.d);
+
+// Render: "pick a style" chooses a look, "answer five quick questions" fills five dots,
+// "Claude renders" plays the result: a mini copy of this diagram
+pulse('render', C5.a - 0.05, true); step(4, C5.a - 0.3);
+tl.to(looks, { y: -6, duration: 0.25, ease: 'power2.out', stagger: 0.05 }, C5.style - 0.35);
+tl.to(looks, { y: 0, duration: 0.3, ease: 'power2.inOut', stagger: 0.05 }, C5.style - 0.1);
+tl.set(lookRing, { opacity: 1, scale: 1.08 }, C5.style);
+tl.to(lookRing, { scale: 1, duration: 0.4, ease: 'back.out(3)' }, C5.style);
+tl.to([looks[0], looks[2], looks[3]], { opacity: 0.35, duration: 0.3, ease: 'power2.out' }, C5.style + 0.05);
+const qstep = Math.max(0.12, (C5.questions + 0.3 - C5.answer) / 5);
+qdots.forEach((d, i) => {
+  tl.to(d, { backgroundColor: GREEN, duration: 0.12, ease: 'power2.out' }, C5.answer + i * qstep);
+  tl.to(d, { scale: 1.25, duration: 0.1, ease: 'power2.out' }, C5.answer + i * qstep);
+  tl.to(d, { scale: 1, duration: 0.3, ease: 'back.out(3)' }, C5.answer + i * qstep + 0.1);
+});
+tl.to(picker, { opacity: 0, y: -30, duration: 0.3, ease: 'power2.in' }, C5.renders - 0.3);
+tl.to(play, { opacity: 1, scale: 1, duration: 0.25, ease: 'back.out(2)' }, C5.renders - 0.15);
+tl.to(play, { scale: 0.84, duration: 0.08, ease: 'power2.in' }, C5.renders + 0.15);
+tl.to(play, { scale: 1.25, opacity: 0, duration: 0.25, ease: 'power2.in' }, C5.renders + 0.23);
+minis.forEach((b, i) => tl.to(b, { opacity: 1, scale: 1, y: 0, duration: 0.35, ease: 'back.out(2)' }, C5.renders + 0.35 + i * 0.16));
+gsap.set(minisvg, { opacity: 0 });
+tl.to(minisvg, { opacity: 1, duration: 0.3, ease: 'power2.out' }, C5.renders + 0.35);
+const MP0 = C5.renders + 0.6, MP1 = C5.d + 0.6;
+tl.to(vfill, { width: 972, duration: C5.e + 0.1 - C5.renders, ease: 'power1.inOut' }, C5.renders + 0.2);
+tl.to(file, { opacity: 1, x: 0, duration: 0.45, ease: 'power3.out' }, C5.e - 0.2);
+tl.to(rcheck, { opacity: 1, scale: 1, duration: 0.45, ease: 'back.out(2.5)' }, C5.e);
+
+// CTA: pull out, sweep; "free" lands the title, "link" lands the address, "screen" nudges it
+const E = C5.d;
+tl.to(ctr, { opacity: 0, duration: 0.3, ease: 'power2.in' }, E);
+['c1', 'c2', 'c3', 'c4'].forEach((id, i) => { const w = WIRES[id];
+  tl.to(w.lit, { attr: { opacity: 1 }, duration: 0.15, ease: 'power2.out' }, E + 0.7 + i * 0.1);
+  tl.to(w.lit, { attr: { opacity: 0.45 }, duration: 0.7, ease: 'power2.inOut' }, E + 0.9 + i * 0.1); });
+['clone', 'copy', 'check', 'prompt', 'render'].forEach((id, i) => pulse(id, E + 0.7 + i * 0.1));
+tl.to(e1, { y: 0, duration: 0.6, ease: 'power3.out' }, CT.free - 0.2);
+tl.to(url, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, CT.link - 0.25);
+tl.to(url, { scale: 1.04, duration: 0.25, ease: 'power2.out' }, CT.screen);
+tl.to(url, { scale: 1, duration: 0.5, ease: 'back.out(3)' }, CT.screen + 0.25);
+[['c1', 0], ['c2', 0.15], ['c3', 0.3], ['c4', 0.45]].forEach(([id, o]) => {
+  for (let t = E + 1.1 + o; t + 0.6 < DUR; t += 0.5) packet(id, t, id === 'c2' || id === 'c4' ? 0.9 : 0.5, { small: true, ease: 'none' });
+});
+
+// ---------- camera: pure function of time. It settles on a card at TM.x.a and leaves at TM.x.d ----------
+const card = (id, s, sy) => ({ x: N[id].cx, y: N[id].cy + (960 - (sy || 860)) / s, s });
+const WIDE = { x: 1100, y: 1235, s: 0.5 };
+const K = [
+  { t: 0.0, ...WIDE },
+  { t: H.d, x: 1100, y: 1235, s: 0.54, e: 'sine.out' },
+  { t: C1.a, ...card('clone', 1.2), e: 'expo.inOut' },
+  { t: C1.d, ...card('clone', 1.25), e: 'none' },
+  { t: C2.a, ...card('copy', 1.2), e: 'power3.inOut' },
+  { t: C2.d, ...card('copy', 1.25), e: 'none' },
+  { t: C3.a, ...card('check', 1.2), e: 'power3.inOut', dip: 0.18 },
+  { t: C3.d, ...card('check', 1.25), e: 'none' },
+  { t: C4.a, ...card('prompt', 1.2), e: 'power3.inOut' },
+  { t: C4.d, ...card('prompt', 1.25), e: 'none' },
+  { t: C5.a, ...card('render', 0.84, 1010), e: 'power3.inOut' },
+  { t: C5.d, ...card('render', 0.88, 1010), e: 'none' },
+  { t: C5.d + 0.95, ...WIDE, e: 'expo.inOut' },
+  { t: DUR, x: 1100, y: 1235, s: 0.55, e: 'none' },
+];
+K.forEach(k => { if (k.e) k.ef = gsap.parseEase(k.e); });
+function cam(t) {
+  if (t <= K[0].t) return K[0];
+  for (let i = 1; i < K.length; i++) {
+    const a = K[i - 1], b = K[i];
+    if (t <= b.t) {
+      const u = (t - a.t) / (b.t - a.t), e = b.ef(u);
+      let s = Math.exp(Math.log(a.s) + (Math.log(b.s) - Math.log(a.s)) * e);
+      if (b.dip) s *= 1 - b.dip * Math.sin(Math.PI * e);
+      return { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, s };
+    }
+  }
+  return K[K.length - 1];
+}
+
+const clock = { t: 0 };
+function frame(t) {
+  const c = cam(t), c0 = cam(Math.max(0, t - 1 / 30));
+  const s = c.s;
+  world.style.transform = `translate(${540 - c.x * s}px, ${960 - c.y * s}px) scale(${s})`;
+  // lean with camera speed; land tilted at 20 deg, tip back during the pull out
+  const vx = (c.x - c0.x) * s, vy = (c.y - c0.y) * s;
+  const ry = Math.max(-6, Math.min(6, vx * 0.06)), rx = Math.max(-5, Math.min(5, -vy * 0.06));
+  const cl = v => Math.max(0, Math.min(1, v));
+  const uo = cl(t / TM.clone.a), eo = Math.pow(1 - uo, 3);
+  const up = cl((t - TM.render.d) / 2.4), bp = Math.pow(Math.sin(Math.PI * up), 1.3) * (up > 0 && up < 1 ? 1 : 0);
+  const RX = 20 * eo + 18 * bp, RZ = -4 * eo - 3 * bp;
+  stage.style.transform = `perspective(2600px) rotateX(${rx + RX}deg) rotateY(${ry}deg) rotateZ(${RZ}deg)`;
+  fog.style.opacity = Math.min(0.5, RX / 40);
+  const g = 38 * Math.pow(s, 0.3);
+  grid.style.backgroundSize = `${g}px ${g}px`;
+  const gx = ((1200 - c.x * s * 0.8) % g + g) % g, gy = ((1400 - c.y * s * 0.8) % g + g) % g;
+  grid.style.backgroundPosition = `${gx}px ${gy}px`;
+  pmark.firstChild.style.transform = `rotate(${t * 14}deg)`;
+  // mini player: the packet runs the little circuit, lights it on the first pass, then keeps looping
+  const mt = t - MP0, MPD = 1.9;
+  if (mt > 0 && t < MP1) {
+    const pass = mt / MPD, u = pass % 1, eu = 0.5 - 0.5 * Math.cos(Math.PI * u), p = mAt(eu);
+    mdot.style.transform = `translate(${p.x}px, ${p.y}px)`; mdot.style.opacity = Math.min(1, u * 10, (1 - u) * 10);
+    mlit.setAttribute('stroke-dashoffset', pass >= 1 ? 0 : mL - eu * mL);
+  } else { mdot.style.opacity = 0; mlit.setAttribute('stroke-dashoffset', mt > 0 ? 0 : mL); }
+}
+tl.to(clock, { t: DUR, duration: DUR, ease: 'none', onUpdate: () => frame(clock.t) }, 0);
+frame(0);
+tl.seek(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+# Builds a ready-to-upload skill zip every time the skill changes,
+# so people can download it in one click from the Releases page.
+name: Build skill zip
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "explainer-short/**"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Zip the skill folder
+        run: zip -r explainer-short.zip explainer-short
+
+      - name: Publish to the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest explainer-short.zip --clobber
+          else
+            gh release create latest explainer-short.zip \
+              --title "Explainer Short – download" \
+              --notes "Download explainer-short.zip below and unzip it into ~/.claude/skills/ (Claude Code only; the Claude app is not supported)."
+          fi

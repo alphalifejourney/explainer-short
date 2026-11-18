@@ -1,0 +1,13 @@
+{
+  "title": "How to install Claude Video 2",
+  "voice": "chatterbox:clone",
+  "scenes": [
+    { "id": "hook",   "vo": "Claude made this whole video from one prompt. Here is how you set it up." },
+    { "id": "clone",  "vo": "Step one. Clone the Claude Video 2 repo from GitHub." },
+    { "id": "copy",   "vo": "Step two. Copy the folder into your Claude skills folder." },
+    { "id": "check",  "vo": "Step three. Make sure Node and FFmpeg are installed." },
+    { "id": "prompt", "vo": "Step four. Open Claude Code and say, make me a motion graphic." },
+    { "id": "render", "vo": "Step five. Pick a style, answer five quick questions, and Claude renders the whole thing for you." },
+    { "id": "cta",    "vo": "It is completely free. Grab it from the link on screen." }
+  ]
+}
